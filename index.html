@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa de Calor - Recife</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+        font-family: 'Arial', sans-serif;
+        background-color: #f4f4f9;
+        margin: 0;
+        padding: 0;
+    }
+    #map {
+        height: 700px;
+        width: 100%;
+        border-radius: 10px;
+    }
+    .stat-card {
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        background: linear-gradient(135deg, #3f51b5, #2196f3);
+        color: white;
+        height: 150px;
+    }
+    .stat-card h4 {
+        margin-bottom: 10px;
+        font-size: 1rem;
+        color: #ffffff;
+    }
+    .stat-card p {
+        font-size: 2rem;
+        font-weight: bold;
+    }
+    .form-container {
+        padding: 20px;
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    .form-select, .form-control {
+        margin-bottom: 10px;
+    }
+    .btn-primary, .btn-danger {
+        width: 100%;
+    }
+    .chart-container {
+        margin-top: 20px;
+    }
+    .card-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        justify-content: space-between;
+    }
+    .card-container .stat-card {
+        flex: 1 1 calc(20% - 15px);
+        min-width: 180px;
+    }
+    .form-and-map {
+        display: flex;
+        gap: 20px;
+    }
+    .form-container {
+        width: 250px;
+    }
+  </style>
+</head>
+<body>
+<div class="container mt-4">
+  <h1 class="text-center mb-4">Painel de Análise - Ocorrências em Recife</h1>
+
+  <!-- Cards no topo -->
+  <div class="card-container mb-4">
+    <div class="stat-card">
+      <h4>Total de Ocorrências</h4>
+      <p id="totalOcorrencias">0</p>
+    </div>
+    <div class="stat-card">
+      <h4>Bairro Mais Perigoso</h4>
+      <p id="bairroMaisPerigoso">Nenhum</p>
+    </div>
+    <div class="stat-card">
+      <h4>Ocorrência Mais Comum</h4>
+      <p id="ocorrenciaMaisComum">Nenhuma</p>
+    </div>
+    <div class="stat-card">
+      <h4>Bairro Menos Perigoso</h4>
+      <p id="bairroMenosPerigoso">Nenhum</p>
+    </div>
+    <div class="stat-card">
+      <h4>Segunda Ocorrência Mais Comum</h4>
+      <p id="segundaOcorrencia">Nenhuma</p>
+    </div>
+  </div>
+
+  <!-- Formulário e Mapa ao lado -->
+  <div class="form-and-map">
+    <!-- Formulário -->
+    <div class="form-container">
+      <h3>Adicionar Ocorrência</h3>
+      <div class="form-group">
+        <label for="bairro">Bairro</label>
+        <select id="bairro" class="form-select">
+          <option value="">Selecione o Bairro</option>
+          <!-- Os bairros serão adicionados aqui dinamicamente -->
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="ocorrencia">Tipo de Ocorrência</label>
+        <select id="ocorrencia" class="form-select">
+          <option value="">Selecione o Tipo de Ocorrência</option>
+          <option value="Furto">Furto</option>
+          <option value="Assalto">Assalto</option>
+          <option value="Violência Doméstica">Violência Doméstica</option>
+          <option value="Tráfico de Drogas">Tráfico de Drogas</option>
+          <option value="Vandalismo">Vandalismo</option>
+          <option value="Agressão">Agressão</option>
+        </select>
+      </div>
+      <button id="adicionarOcorrencia" class="btn btn-primary">Adicionar Ocorrência</button>
+      <button id="zerarEstatisticas" class="btn btn-danger mt-3" disabled>Zerar Estatísticas</button>
+    </div>
+
+    <!-- Mapa -->
+    <div id="map" class="mt-4" style="flex-grow: 1;"></div>
+  </div>
+
+  <div class="row mt-4">
+    <div class="col-md-6">
+      <div class="chart-container">
+        <canvas id="ocorrenciaChart"></canvas>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="chart-container">
+        <canvas id="bairroChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let map = L.map('map').setView([-8.047562, -34.877], 12);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  const bairros = [
+    { nome: "Boa Viagem", latitude: -8.115396, longitude: -34.903328 },
+    { nome: "Casa Forte", latitude: -8.034442, longitude: -34.930199 },
+    { nome: "Pina", latitude: -8.085315, longitude: -34.889059 },
+    { nome: "Cordeiro", latitude: -8.050000, longitude: -34.920000 },
+    { nome: "Tamarineira", latitude: -8.040845, longitude: -34.912987 },
+    { nome: "Ipsep", latitude: -8.117428, longitude: -34.929750 },
+    { nome: "Imbiribeira", latitude: -8.099683, longitude: -34.913867 },
+    { nome: "Jaqueira", latitude: -8.045510, longitude: -34.906211 },
+    { nome: "Graças", latitude: -8.046625, longitude: -34.901759 },
+    { nome: "Derby", latitude: -8.054493, longitude: -34.896056 },
+  ];
+
+  // Carregar os dados armazenados no localStorage
+  const storedData = JSON.parse(localStorage.getItem('ocorrenciasData')) || { ocorrencias: [], bairroStats: {}, ocorrenciaStats: {}, heatData: [] };
+
+  let { ocorrencias, bairroStats, ocorrenciaStats, heatData } = storedData;
+
+  // Função para popular os bairros no formulário
+  function populateBairros() {
+      const bairroSelect = document.getElementById("bairro");
+      bairros.forEach(bairro => {
+          const option = document.createElement("option");
+          option.value = bairro.nome;
+          option.textContent = bairro.nome;
+          bairroSelect.appendChild(option);
+      });
+  }
+
+  // Função para armazenar os dados no localStorage
+  function saveData() {
+      localStorage.setItem('ocorrenciasData', JSON.stringify({ ocorrencias, bairroStats, ocorrenciaStats, heatData }));
+  }
+
+  // Função para atualizar as estatísticas nos cards
+  function updateStats() {
+      const totalOcorrencias = ocorrencias.length;
+      document.getElementById('totalOcorrencias').textContent = totalOcorrencias;
+
+      // Bairro mais perigoso
+      const bairroMaisPerigoso = Object.keys(bairroStats).reduce((a, b) => bairroStats[a] > bairroStats[b] ? a : b, null);
+      document.getElementById('bairroMaisPerigoso').textContent = bairroMaisPerigoso || "Nenhum";
+
+      // Ocorrência mais comum
+      const ocorrenciaMaisComum = Object.keys(ocorrenciaStats).reduce((a, b) => ocorrenciaStats[a] > ocorrenciaStats[b] ? a : b, null);
+      document.getElementById('ocorrenciaMaisComum').textContent = ocorrenciaMaisComum || "Nenhuma";
+
+      // Bairro menos perigoso
+      const bairroMenosPerigoso = Object.keys(bairroStats).reduce((a, b) => bairroStats[a] < bairroStats[b] ? a : b, null);
+      document.getElementById('bairroMenosPerigoso').textContent = bairroMenosPerigoso || "Nenhum";
+
+      // Segunda ocorrência mais comum
+      const segundaOcorrencia = Object.keys(ocorrenciaStats).sort((a, b) => ocorrenciaStats[b] - ocorrenciaStats[a])[1];
+      document.getElementById('segundaOcorrencia').textContent = segundaOcorrencia || "Nenhuma";
+  }
+
+  // Função para atualizar os gráficos
+  function updateCharts() {
+      const ocorrenciaChart = new Chart(document.getElementById('ocorrenciaChart'), {
+          type: 'bar',
+          data: {
+              labels: Object.keys(ocorrenciaStats),
+              datasets: [{
+                  label: 'Ocorrências',
+                  data: Object.values(ocorrenciaStats),
+                  backgroundColor: '#90caf9'  // Cor clara
+              }]
+          }
+      });
+
+      const bairroChart = new Chart(document.getElementById('bairroChart'), {
+          type: 'bar',
+          data: {
+              labels: Object.keys(bairroStats),
+              datasets: [{
+                  label: 'Ocorrências por Bairro',
+                  data: Object.values(bairroStats),
+                  backgroundColor: '#c5e1a5'  // Cor clara
+              }]
+          }
+      });
+  }
+
+  // Função para adicionar uma nova ocorrência
+  document.getElementById('adicionarOcorrencia').addEventListener('click', () => {
+      const bairro = document.getElementById('bairro').value;
+      const ocorrencia = document.getElementById('ocorrencia').value;
+      if (bairro && ocorrencia) {
+          ocorrencias.push({ bairro, ocorrencia, lat: bairros.find(b => b.nome === bairro).latitude, lon: bairros.find(b => b.nome === bairro).longitude });
+
+          // Atualizar estatísticas
+          bairroStats[bairro] = (bairroStats[bairro] || 0) + 1;
+          ocorrenciaStats[ocorrencia] = (ocorrenciaStats[ocorrencia] || 0) + 1;
+          heatData.push([bairros.find(b => b.nome === bairro).latitude, bairros.find(b => b.nome === bairro).longitude, 1]);
+
+          // Salvar e atualizar
+          saveData();
+          updateStats();
+          updateCharts();
+          alert("Ocorrência adicionada com sucesso!");
+      } else {
+          alert("Por favor, preencha todos os campos.");
+      }
+  });
+
+  // Função para zerar as estatísticas
+  document.getElementById('zerarEstatisticas').addEventListener('click', () => {
+      ocorrencias = [];
+      bairroStats = {};
+      ocorrenciaStats = {};
+      heatData = [];
+      saveData();
+      updateStats();
+      updateCharts();
+      alert("Estatísticas zeradas com sucesso!");
+  });
+
+  // Inicialização
+  populateBairros();
+  updateStats();
+  updateCharts();
+
+</script>
+</body>
+</html>
